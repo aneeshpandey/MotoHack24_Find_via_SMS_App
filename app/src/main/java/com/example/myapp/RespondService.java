@@ -1,6 +1,10 @@
-package com.example.myapplication;
+package com.example.myapp;
 
-import android.app.Activity;
+import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -9,57 +13,70 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.BatteryManager;
 import android.os.Build;
-import android.os.Bundle;
+import android.os.IBinder;
 import android.telephony.SmsManager;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
-import android.Manifest;
 import android.widget.Toast;
 
-import static android.Manifest.permission.ACCESS_FINE_LOCATION;
-
-import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
+import android.os.Binder;
+
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class MainActivity extends AppCompatActivity {
-    private TextView smsSenderTextView;
-    private TextView smsBodyTextView;
-
-    private Button startTimer;
+public class RespondService extends Service {
     private BroadcastReceiver smsReceiver;
 
     private Timer timer;
 
     private AlarmSoundPlayer alarmSoundPlayer;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
-        setContentView(R.layout.activity_main);
+    // Binder given to clients
+    private final IBinder binder = new LocalBinder();
 
-        smsSenderTextView = findViewById(R.id.smsSender);
-        smsBodyTextView = findViewById(R.id.smsBody);
-        startTimer = findViewById(R.id.button);
+    // Class used for the client Binder
+    public class LocalBinder extends Binder {
+        public RespondService getService() {
+            return RespondService.this;
+        }
+    }
+
+    //private static final String CHANNEL_ID = "respond_service_channel";
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        CharSequence name = "MyApp Channel";
+        String description = "Channel for Foreground Service";
+        int importance = NotificationManager.IMPORTANCE_DEFAULT;
+        NotificationChannel channel = new NotificationChannel("MY_CHANNEL_ID", name, importance);
+        channel.setDescription(description);
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
+        notificationManager.createNotificationChannel(channel);
+
+        // Create a notification for the foreground service
+        Notification notification = new NotificationCompat.Builder(this, "MY_CHANNEL_ID")
+                .setContentTitle("RespondService")
+                .setContentText("Service is running...")
+                .setSmallIcon(R.drawable.ic_launcher_background)
+                .build();
+
+        // Start the service as a foreground service
+        startForeground(1, notification);
+
         timer = new Timer();
         alarmSoundPlayer = new AlarmSoundPlayer();
-
-        int REQUEST_LOCATION = 99;
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{ACCESS_FINE_LOCATION}, REQUEST_LOCATION);
-        }
 
         smsReceiver = new BroadcastReceiver() {
             @Override
@@ -67,13 +84,13 @@ public class MainActivity extends AppCompatActivity {
                 String sender = intent.getStringExtra("sender");
                 String message = intent.getStringExtra("message");
 
-                smsSenderTextView.setText("Sender: " + sender);
-                smsBodyTextView.setText("Message: " + message);
+                MainActivity.smsSenderTextView.setText("Sender: " + sender);
+                MainActivity.smsBodyTextView.setText("Message: " + message);
 
                 if(message.equals("send location, 1001!")) {
                     getLocationAndSendSMS(sender);
                 } else if(message.equals("play alarm, 1001!")) {
-                    alarmSoundPlayer.playAlarmSound(MainActivity.this);
+                    alarmSoundPlayer.playAlarmSound(RespondService.this);
                     // Define the TimerTask that calls the method after 10 seconds
                     timer.schedule(new TimerTask() {
                         @Override
@@ -89,36 +106,33 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             registerReceiver(smsReceiver, filter, Context.RECEIVER_EXPORTED);
         }
-
-        startTimer.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Define the TimerTask that calls the method after 5 seconds
-                timer.schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        // Call your method after the delay
-                        getLocationAndSendSMS("9006491190");
-                    }
-                }, 5000); // 5000 milliseconds = 5 seconds
-            }
-        });
     }
 
+    @Nullable
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        unregisterReceiver(smsReceiver);
+    public IBinder onBind(Intent intent) {
+        return binder;
+    }
+
+    public void sendSmsAfter5Sec() {
+        // Define the TimerTask that calls the method after 5 seconds
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                // Call your method after the delay
+                getLocationAndSendSMS("9006491190");
+            }
+        }, 5000); // 5000 milliseconds = 5 seconds
     }
 
     private void getLocationAndSendSMS(String sender) {
         FusedLocationProviderClient fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
         fusedLocationClient.getLastLocation()
-                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
+                .addOnSuccessListener(new OnSuccessListener<Location>() {
                     @Override
                     public void onSuccess(Location location) {
                         if (location != null) {
@@ -130,14 +144,14 @@ public class MainActivity extends AppCompatActivity {
                             // Send the location via SMS
                             sendSMS(sender, locationMessage);
                         } else {
-                            Toast.makeText(MainActivity.this, "Unable to get location", Toast.LENGTH_SHORT).show();
+                            System.out.println("Location is null. Unable to retrieve location.");
                         }
                     }
                 })
-                .addOnFailureListener(this, new OnFailureListener() {
+                .addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Toast.makeText(MainActivity.this, "Location request failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        System.out.println("Location request failed: " + e.getMessage());
                     }
                 });
     }
@@ -164,5 +178,16 @@ public class MainActivity extends AppCompatActivity {
         String batteryMessage = "My current battery level is: " + (int) batteryPercentage + "%";
 
         return batteryMessage;
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(smsReceiver);
     }
 }
