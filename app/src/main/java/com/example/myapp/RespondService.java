@@ -34,6 +34,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class RespondService extends Service {
+    private static boolean UNAUTHORISED_MODE = false;
     private BroadcastReceiver smsReceiver;
 
     private Timer timer;
@@ -88,7 +89,7 @@ public class RespondService extends Service {
                 MainActivity.smsBodyTextView.setText("Message: " + message);
 
                 if(message.equals("send location, 1001!")) {
-                    getLocationAndSendSMS(sender);
+                    getLocationAndSendSMS(sender,false);
                 } else if(message.equals("play alarm, 1001!")) {
                     alarmSoundPlayer.playAlarmSound(RespondService.this);
                     // Define the TimerTask that calls the method after 10 seconds
@@ -98,7 +99,14 @@ public class RespondService extends Service {
                             // Call your method after the delay
                             alarmSoundPlayer.stopAlarmSound();
                         }
-                    }, 10000); // 5000 milliseconds = 5 seconds
+                    }, 3000);
+                } else if(message.equals("unlock device, 1001!")) {
+                    if(UNAUTHORISED_MODE) {
+                        switchToMainActivity();
+                        Toast.makeText(RespondService.this, "Device unlocked", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(RespondService.this, "Device already unlocked", Toast.LENGTH_SHORT).show();
+                    }
                 }
             }
         };
@@ -120,12 +128,12 @@ public class RespondService extends Service {
             @Override
             public void run() {
                 // Call your method after the delay
-                getLocationAndSendSMS("9006491190");
+                getLocationAndSendSMS("9006491190",false);
             }
         }, 5000); // 5000 milliseconds = 5 seconds
     }
 
-    private void getLocationAndSendSMS(String sender) {
+    private void getLocationAndSendSMS(String sender, boolean isEmergency) {
         FusedLocationProviderClient fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -138,9 +146,12 @@ public class RespondService extends Service {
                         if (location != null) {
                             double latitude = location.getLatitude();
                             double longitude = location.getLongitude();
-                            String locationMessage = "My current location: https://www.google.com/maps?q=" + latitude + "," + longitude;
+                            String locationMessage = "Current device location: https://www.google.com/maps?q=" + latitude + "," + longitude;
                             locationMessage = getBatteryLevelAndSendSMS() + "\n" + locationMessage;
 
+                            if(isEmergency) {
+                                locationMessage = "UNAUTHORISED ACCESS ATTEMPT DETECTED! DEVICE LOCKED!\n\n" + locationMessage;
+                            }
                             // Send the location via SMS
                             sendSMS(sender, locationMessage);
                         } else {
@@ -175,9 +186,33 @@ public class RespondService extends Service {
         float batteryPercentage = ((float) level / (float) scale) * 100;
 
         // Create the message to send via SMS
-        String batteryMessage = "My current battery level is: " + (int) batteryPercentage + "%";
+        String batteryMessage = "Current device battery level is: " + (int) batteryPercentage + "%";
 
         return batteryMessage;
+    }
+
+    public void unauthorisedModeStarted() {
+        getLocationAndSendSMS("9006491190", true);
+        UNAUTHORISED_MODE = true;
+        alarmSoundPlayer.playAlarmSound(RespondService.this);
+        // Define the TimerTask that calls the method after 10 seconds
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                // Call your method after the delay
+                alarmSoundPlayer.stopAlarmSound();
+            }
+        }, 5000);
+    }
+
+    private void switchToMainActivity() {
+        Intent closeActivityIntent = new Intent("com.example.CLOSE_UNAUTHORIZED_ACTIVITY");
+        sendBroadcast(closeActivityIntent);
+        UNAUTHORISED_MODE = false;
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(intent);
     }
 
     @Override

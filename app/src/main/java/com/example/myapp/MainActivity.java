@@ -7,6 +7,7 @@ import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -92,5 +93,20 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         Intent intent = new Intent(this, RespondService.class);
         stopService(intent); // Starts the service
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getPointerCount() == 2) { // Check if two fingers are on the screen
+            if (event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+                myService.unauthorisedModeStarted();
+                // Switch to UnauthorizedAccessActivity
+                Intent intent = new Intent(this, UnauthorizedAccessActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(intent);
+                return true;
+            }
+        }
+        return super.onTouchEvent(event);
     }
 }
