@@ -88,9 +88,9 @@ public class RespondService extends Service {
                 MainActivity.smsSenderTextView.setText("Sender: " + sender);
                 MainActivity.smsBodyTextView.setText("Message: " + message);
 
-                if(message.equals("send location, 1001!")) {
+                if(message.equals("Send location, 1001!")) {
                     getLocationAndSendSMS(sender,false);
-                } else if(message.equals("play alarm, 1001!")) {
+                } else if(message.equals("Play alarm, 1001!")) {
                     alarmSoundPlayer.playAlarmSound(RespondService.this);
                     // Define the TimerTask that calls the method after 10 seconds
                     timer.schedule(new TimerTask() {
@@ -100,7 +100,7 @@ public class RespondService extends Service {
                             alarmSoundPlayer.stopAlarmSound();
                         }
                     }, 3000);
-                } else if(message.equals("unlock device, 1001!")) {
+                } else if(message.equals("Unlock device, 1001!")) {
                     if(UNAUTHORISED_MODE) {
                         switchToMainActivity();
                         Toast.makeText(RespondService.this, "Device unlocked", Toast.LENGTH_SHORT).show();
@@ -133,7 +133,7 @@ public class RespondService extends Service {
         }, 5000); // 5000 milliseconds = 5 seconds
     }
 
-    private void getLocationAndSendSMS(String sender, boolean isEmergency) {
+    private void getLocationAndSendSMS(String sender, boolean isEmergencyVar) {
         FusedLocationProviderClient fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -146,12 +146,14 @@ public class RespondService extends Service {
                         if (location != null) {
                             double latitude = location.getLatitude();
                             double longitude = location.getLongitude();
-                            String locationMessage = "Current device location: https://www.google.com/maps?q=" + latitude + "," + longitude;
+                            String locationMessage = "Location: https://www.google.com/maps?q=" + latitude + "," + longitude;
                             locationMessage = getBatteryLevelAndSendSMS() + "\n" + locationMessage;
-
-                            if(isEmergency) {
-                                locationMessage = "UNAUTHORISED ACCESS ATTEMPT DETECTED! DEVICE LOCKED!\n\n" + locationMessage;
+                            String s = "";
+                            if(isEmergencyVar) {
+                                s = "UNAUTHORISED ACCESS ATTEMPT DETECTED! DEVICE LOCKED!\n\n";
                             }
+                            locationMessage = s.concat(locationMessage);
+                            System.out.println("aneesh +" + isEmergencyVar);
                             // Send the location via SMS
                             sendSMS(sender, locationMessage);
                         } else {
@@ -186,15 +188,15 @@ public class RespondService extends Service {
         float batteryPercentage = ((float) level / (float) scale) * 100;
 
         // Create the message to send via SMS
-        String batteryMessage = "Current device battery level is: " + (int) batteryPercentage + "%";
+        String batteryMessage = "Battery level is: " + (int) batteryPercentage + "%";
 
         return batteryMessage;
     }
 
     public void unauthorisedModeStarted() {
-        getLocationAndSendSMS("9006491190", true);
         UNAUTHORISED_MODE = true;
         alarmSoundPlayer.playAlarmSound(RespondService.this);
+        getLocationAndSendSMS("9006491190", true);
         // Define the TimerTask that calls the method after 10 seconds
         timer.schedule(new TimerTask() {
             @Override
